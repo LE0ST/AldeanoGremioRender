@@ -59,7 +59,7 @@ intents.reactions = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="mu!", intents=intents)
-bot.remove_command("help")  # Removemos el help por defecto de discord.py
+bot.help_command = None  # Removemos el help por defecto de discord.py
 
 eventos_iniciados = False
 
@@ -75,7 +75,11 @@ async def obtener_canal(canal_id: int) -> discord.TextChannel | None:
         except Exception:
             logging.error(f"❌ No se pudo obtener el canal {canal_id}")
             return None
-    return canal
+            
+    # Le confirmamos a Pylance que es un canal de texto
+    if isinstance(canal, discord.TextChannel):
+        return canal
+    return None
 
 
 async def recoger_participantes(mensaje: discord.Message, emoji: str) -> list:
@@ -253,7 +257,7 @@ async def sistema_eventos():
 
 @bot.command(name="spawn")
 @commands.has_role(ROL_STAFF_ID)
-async def spawn(ctx, tipo: str = None):
+async def spawn(ctx, tipo: str | None = None):
     """
     Invoca un evento manualmente sin alterar el reloj automático.
     Uso:
@@ -384,7 +388,7 @@ async def set_balance(ctx, miembro: discord.Member, instancia: str, cantidad: in
 
 
 @bot.command(name="balance")
-async def ver_balance(ctx, miembro: discord.Member = None):
+async def ver_balance(ctx, miembro: discord.Member | None = None):
     """
     Muestra el balance por instancia y tier económico de un usuario.
     Uso: mu!balance [@usuario]
@@ -438,4 +442,7 @@ t = Thread(target=run)
 t.daemon = True
 t.start()
 
-bot.run(os.getenv("TOKEN"))
+token = os.getenv("TOKEN")
+if not token:
+    raise ValueError("❌ ERROR FATAL: No se encontró el TOKEN en el archivo .env")
+bot.run(token)
