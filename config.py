@@ -56,7 +56,7 @@ TIEMPO_MAX = 20    if DEV_MODE else 10800  # dev: 20s  | prod: 3.0 horas
 
 FOOTER_TEXT  = "Copyright (©) Casino Club"
 FOOTER_ICON  = "https://i.imgur.com/ytopJtE.gif"
-EMOJI_KAKERA = "<:ka_amarillo:1506728153459196054>"
+EMOJI_KAKERA = "<:ka_amarillo:1506025670734516406>"
 
 # =========================
 # PREMIOS POR MODO
