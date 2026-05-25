@@ -23,8 +23,7 @@ CANALES_EVENTOS = (
     [
         884137988114767882,
         884135395342819348,
-        956318972221984779,
-        815023234721251418
+        956318972221984779
     ]
 )
 
@@ -56,7 +55,7 @@ TIEMPO_MAX = 20    if DEV_MODE else 10800  # dev: 20s  | prod: 3.0 horas
 
 FOOTER_TEXT  = "Copyright (©) Casino Club"
 FOOTER_ICON  = "https://i.imgur.com/ytopJtE.gif"
-EMOJI_KAKERA = "<:ka_amarillo:1506025670734516406>"
+EMOJI_KAKERA = "<:ka_amarillo:1506728153459196054>"
 
 # =========================
 # PREMIOS POR MODO
@@ -72,15 +71,17 @@ SOLO_MIN_K      = 600    # Solitario — premio reducido
 SOLO_MAX_K      = 1200
 
 # =========================
-# SISTEMA ANTI-MONOPOLIO (4 TIERS)
+# SISTEMA ANTI-MONOPOLIO (4 TIERS ADAPTATIVOS)
 # =========================
-TIER_CUSPIDE_MIN = 200_000  # > 200k global → Los dueños del server
-TIER_ELITE_MIN   =  60_000  # 60k–200k → Farmeadores fuertes
-TIER_MEDIO_MIN   =  25_000  # 25k–60k → Jugador activo promedio
-                             # < 25k → Pueblo / Recién llegados
+# Ajustamos los mínimos para expandir la clase media y capturar la oligarquía real
+TIER_CUSPIDE_MIN = 120_000  # Captura a los dueños absolutos del server en el clúster
+TIER_ELITE_MIN   =  50_000  # Controla a los farmeadores fuertes antes del monopolio
+TIER_MEDIO_MIN   =  15_000  # El piso real del jugador promedio activo en i2 e i3
+                             # < 15k → Pueblo / Recién llegados
 
-MULTIPLICADOR_CUSPIDE = 0.50  # -50% impuesto aduanero
-MULTIPLICADOR_ELITE   = 0.75  # -25% impuesto de control
+# Multiplicadores suavizados (Psicología de progresión sana)
+MULTIPLICADOR_CUSPIDE = 0.65  # Impuesto aduanero del 35% (Retiene sin deprimir)
+MULTIPLICADOR_ELITE   = 0.85  # Impuesto moderado del 15%
 MULTIPLICADOR_MEDIO   = 1.00  # Libre comercio (0% cambios)
-MULTIPLICADOR_PUEBLO  = 1.30  # +30% de subsidio de apoyo
-MULTIPLICADOR_NEUTRO  = 1.00
+MULTIPLICADOR_PUEBLO  = 1.15  # Subsidio controlado del +15% (Evita explotación de alts)
+MULTIPLICADOR_NEUTRO  = 1.00  # Sin registro → Sin modificaciones (Evita abuso de cuentas nuevas)

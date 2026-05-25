@@ -9,6 +9,7 @@ import re
 from threading import Thread
 from flask import Flask
 from dotenv import load_dotenv
+from typing import Optional
 
 from config  import (
     CANALES_EVENTOS, ROL_AVISO_ID, ROL_STAFF_ID,
@@ -19,7 +20,7 @@ from config  import (
     TIEMPO_MIN, TIEMPO_MAX,
     DEV_MODE
 )
-from economy import aplicar_impuesto, get_tier_info
+from economy import aplicar_impuesto_adaptativo, get_tier_info
 from events  import TODOS_LOS_EVENTOS, EVENTOS_SIMPLES, EVENTO_MAZMORRA
 from embeds  import (
     embed_evento,
@@ -59,13 +60,33 @@ intents.reactions = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="mu!", intents=intents)
-bot.help_command = None  # Removemos el help por defecto de discord.py
+bot.remove_command("help")  # Removemos el help por defecto de discord.py
 
 eventos_iniciados = False
 
 # =========================
 # HELPERS
 # =========================
+
+# Mapeador estricto para detectar en qué entorno se ejecutó el evento automático
+MAPA_CANAL_A_INSTANCIA = (
+    {
+        919819565414903808: "i1",
+        920686951546355764: "i2",
+        1506727323179942039: "i3"
+    }
+    if DEV_MODE else
+    {
+        884137988114767882: "i1",
+        884135395342819348: "i2",
+        956318972221984779: "i3"
+    }
+)
+
+def obtener_codigo_instancia(canal_id: int) -> str:
+    """Devuelve 'i1', 'i2' o 'i3' según el canal, defaltea a 'i1' si es manual."""
+    return MAPA_CANAL_A_INSTANCIA.get(canal_id, "i1")
+
 
 async def obtener_canal(canal_id: int) -> discord.TextChannel | None:
     canal = bot.get_channel(canal_id)
@@ -75,10 +96,11 @@ async def obtener_canal(canal_id: int) -> discord.TextChannel | None:
         except Exception:
             logging.error(f"❌ No se pudo obtener el canal {canal_id}")
             return None
-            
-    # Le confirmamos a Pylance que es un canal de texto
+
     if isinstance(canal, discord.TextChannel):
         return canal
+
+    logging.error(f"❌ El canal {canal_id} no es un canal de texto")
     return None
 
 
@@ -98,37 +120,31 @@ async def recoger_participantes(mensaje: discord.Message, emoji: str) -> list:
 
 async def resolver_simple(canal: discord.TextChannel, participantes: list, evento: dict):
     if not participantes:
-        # Texto plano cuando nadie reacciona
         await canal.send(evento["falla"])
-        logging.warning(f"❌ Nadie participó en '{evento['titulo']}'")
         return
 
+    instancia = obtener_codigo_instancia(canal.id)
     ganador     = random.choice(participantes)
     premio_base = random.randint(evento["min_k"], evento["max_k"])
-    premio_final, multiplicador = aplicar_impuesto(ganador.id, premio_base)
+    
+    # Inyectamos la instancia para el cálculo atenuado
+    premio_final, multiplicador = aplicar_impuesto_adaptativo(ganador.id, premio_base, instancia)
     tier        = get_tier_info(ganador.id)
 
-    # Pasamos premio_base para el recibo matemático
     embed = embed_resultado_duelo(ganador, None, premio_base, premio_final, tier, multiplicador)
     await canal.send(
         content=f"<@&{ROL_STAFF_ID}>",
         embed=embed,
         allowed_mentions=discord.AllowedMentions(roles=True)
     )
-    logging.info(f"🏆 Ganador: {ganador} — Base: {premio_base} | Final: {premio_final} Kakera")
+    logging.info(f"🏆 Ganador Simple: {ganador} — Instancia: {instancia.upper()} — Base: {premio_base} | Final: {premio_final}")
 
 async def resolver_incursion(canal: discord.TextChannel, participantes: list, evento: dict):
-    """
-    Resuelve el resultado según la cantidad de participantes.
-    Aplica impuestos/subsidios del sistema anti-monopolio.
-    """
     n = len(participantes)
+    instancia = obtener_codigo_instancia(canal.id)
 
-    # --- 0 participantes ---
     if n == 0:
-        # Texto plano cuando nadie reacciona
         await canal.send(evento["falla"])
-        logging.warning(f"❌ Nadie participó en '{evento['titulo']}'")
         return
 
     # --- Modo Incursión Cooperativa (3+) ---
@@ -136,20 +152,34 @@ async def resolver_incursion(canal: discord.TextChannel, participantes: list, ev
         botín_total = random.randint(INCURSION_MIN_K, INCURSION_MAX_K)
         premio_base = botín_total // n
 
-        resultados = []
-        for jugador in participantes:
-            premio_final, multiplicador = aplicar_impuesto(jugador.id, premio_base)
-            tier = get_tier_info(jugador.id)
-            # Pasamos premio_base a la tupla
-            resultados.append((jugador, premio_base, premio_final, tier, multiplicador))
+        resultados_temporales = []
+        suma_premios_finales = 0
 
-        embed = embed_resultado_incursion(resultados, botín_total)
+        # Paso 1: Procesamiento y cálculo adaptativo individual
+        for jugador in participantes:
+            premio_final, multiplicador = aplicar_impuesto_adaptativo(jugador.id, premio_base, instancia)
+            tier = get_tier_info(jugador.id)
+            resultados_temporales.append([jugador, premio_base, premio_final, tier, multiplicador])
+            suma_premios_finales += premio_final
+
+        # Paso 2: Blindaje Deficitario (Anti-Inflación de Raids)
+        # Si la inyección global es superior al botín total configurado debido a los subsidios,
+        # comprimimos proporcionalmente para cuidar el dinero inorgánico.
+        if suma_premios_finales > botín_total:
+            factor_reduccion = botín_total / suma_premios_finales
+            for res in resultados_temporales:
+                res[2] = round(res[2] * factor_reduccion)
+
+        # Reestructuramos a tu formato original de tuplas para mantener compatibilidad con embeds.py
+        resultados_finales = [(r[0], r[1], r[2], r[3], r[4]) for r in resultados_temporales]
+
+        embed = embed_resultado_incursion(resultados_finales, botín_total)
         await canal.send(
             content=f"<@&{ROL_STAFF_ID}>",
             embed=embed,
             allowed_mentions=discord.AllowedMentions(roles=True)
         )
-        logging.info(f"🛡️ Incursión cooperativa — {n} jugadores — {botín_total} Kakera total")
+        logging.info(f"🛡️ Raid Balanceado en {instancia.upper()} — {n} jugadores — Botín Real: {botín_total}")
 
     # --- Modo Duelo Competitivo (2) ---
     elif n == 2:
@@ -157,33 +187,31 @@ async def resolver_incursion(canal: discord.TextChannel, participantes: list, ev
         perdedor = next(u for u in participantes if u != ganador)
 
         premio_base = random.randint(DUELO_MIN_K, DUELO_MAX_K)
-        premio_final, multiplicador = aplicar_impuesto(ganador.id, premio_base)
+        premio_final, multiplicador = aplicar_impuesto_adaptativo(ganador.id, premio_base, instancia)
         tier = get_tier_info(ganador.id)
 
-        # Pasamos premio_base para el recibo matemático
         embed = embed_resultado_duelo(ganador, perdedor, premio_base, premio_final, tier, multiplicador)
         await canal.send(
             content=f"<@&{ROL_STAFF_ID}>",
             embed=embed,
             allowed_mentions=discord.AllowedMentions(roles=True)
         )
-        logging.info(f"⚔️ Duelo — Ganador: {ganador} — Base: {premio_base} | Final: {premio_final} Kakera")
+        logging.info(f"⚔️ Duelo en {instancia.upper()} — Ganador: {ganador} — Base: {premio_base} | Final: {premio_final}")
 
     # --- Modo Solitario (1) ---
     else:
         jugador = participantes[0]
         premio_base = random.randint(SOLO_MIN_K, SOLO_MAX_K)
-        premio_final, multiplicador = aplicar_impuesto(jugador.id, premio_base)
+        premio_final, multiplicador = aplicar_impuesto_adaptativo(jugador.id, premio_base, instancia)
         tier = get_tier_info(jugador.id)
 
-        # Pasamos premio_base para el recibo matemático
         embed = embed_resultado_solitario(jugador, premio_base, premio_final, tier, multiplicador)
         await canal.send(
             content=f"<@&{ROL_STAFF_ID}>",
             embed=embed,
             allowed_mentions=discord.AllowedMentions(roles=True)
         )
-        logging.info(f"🗡️ Solitario — {jugador} — Base: {premio_base} | Final: {premio_final} Kakera")
+        logging.info(f"🗡️ Solitario en {instancia.upper()} — {jugador} — Base: {premio_base} | Final: {premio_final}")
 
 # =========================
 # LANZADOR CENTRAL
@@ -257,7 +285,7 @@ async def sistema_eventos():
 
 @bot.command(name="spawn")
 @commands.has_role(ROL_STAFF_ID)
-async def spawn(ctx, tipo: str | None = None):
+async def spawn(ctx, tipo: Optional[str] = None):
     """
     Invoca un evento manualmente sin alterar el reloj automático.
     Uso:
@@ -388,7 +416,7 @@ async def set_balance(ctx, miembro: discord.Member, instancia: str, cantidad: in
 
 
 @bot.command(name="balance")
-async def ver_balance(ctx, miembro: discord.Member | None = None):
+async def ver_balance(ctx, miembro: Optional[discord.Member] = None):
     """
     Muestra el balance por instancia y tier económico de un usuario.
     Uso: mu!balance [@usuario]
@@ -443,6 +471,7 @@ t.daemon = True
 t.start()
 
 token = os.getenv("TOKEN")
-if not token:
-    raise ValueError("❌ ERROR FATAL: No se encontró el TOKEN en el archivo .env")
+if token is None:
+    raise RuntimeError("Environment variable TOKEN is required")
+
 bot.run(token)
