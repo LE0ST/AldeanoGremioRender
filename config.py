@@ -57,6 +57,12 @@ FOOTER_TEXT  = "Copyright (©) Casino Club"
 FOOTER_ICON  = "https://i.imgur.com/ytopJtE.gif"
 EMOJI_KAKERA = "<:ka_amarillo:1506025670734516406>"
 
+
+# Evita que Pylance marque los constantes como "no accedidas" al analizarlas localmente.
+# `__all__` debería ser suficiente para exportarlas, pero algunos analizadores siguen
+# mostrando la advertencia si no detectan uso interno; esta tupla cuenta como uso.
+_ = (FOOTER_TEXT, FOOTER_ICON, EMOJI_KAKERA)
+
 # =========================
 # PREMIOS POR MODO
 # =========================
@@ -85,3 +91,29 @@ MULTIPLICADOR_ELITE   = 0.85  # Impuesto moderado del 15%
 MULTIPLICADOR_MEDIO   = 1.00  # Libre comercio (0% cambios)
 MULTIPLICADOR_PUEBLO  = 1.15  # Subsidio controlado del +15% (Evita explotación de alts)
 MULTIPLICADOR_NEUTRO  = 1.00  # Sin registro → Sin modificaciones (Evita abuso de cuentas nuevas)
+
+# Lista pública de símbolos exportados — ayuda a linters/analizadores estáticos
+__all__ = [
+    "CANALES_EVENTOS",
+    "ROL_AVISO_ID",
+    "ROL_STAFF_ID",
+    "TIEMPO_MIN",
+    "TIEMPO_MAX",
+    "FOOTER_TEXT",
+    "FOOTER_ICON",
+    "EMOJI_KAKERA",
+    "INCURSION_MIN_K",
+    "INCURSION_MAX_K",
+    "DUELO_MIN_K",
+    "DUELO_MAX_K",
+    "SOLO_MIN_K",
+    "SOLO_MAX_K",
+    "TIER_CUSPIDE_MIN",
+    "TIER_ELITE_MIN",
+    "TIER_MEDIO_MIN",
+    "MULTIPLICADOR_CUSPIDE",
+    "MULTIPLICADOR_ELITE",
+    "MULTIPLICADOR_MEDIO",
+    "MULTIPLICADOR_PUEBLO",
+    "MULTIPLICADOR_NEUTRO",
+]

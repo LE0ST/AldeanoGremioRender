@@ -3,7 +3,7 @@
 # =========================
 
 import discord
-from config import FOOTER_TEXT, FOOTER_ICON, EMOJI_KAKERA, ROL_STAFF_ID
+from config import FOOTER_TEXT, FOOTER_ICON, EMOJI_KAKERA
 
 
 def _footer(embed: discord.Embed) -> discord.Embed:

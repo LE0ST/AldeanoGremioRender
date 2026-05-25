@@ -13,7 +13,6 @@ from typing import Optional
 
 from config  import (
     CANALES_EVENTOS, ROL_AVISO_ID, ROL_STAFF_ID,
-    FOOTER_TEXT, FOOTER_ICON, EMOJI_KAKERA,
     INCURSION_MIN_K, INCURSION_MAX_K,
     DUELO_MIN_K, DUELO_MAX_K,
     SOLO_MIN_K, SOLO_MAX_K,
