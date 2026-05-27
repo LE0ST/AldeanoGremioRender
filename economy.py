@@ -2,12 +2,19 @@
 # economy.py — Sistema Anti-Monopolio Adaptativo
 # =========================
 
+import logging
+from random import random
+
 from config import (
     TIER_CUSPIDE_MIN, TIER_ELITE_MIN, TIER_MEDIO_MIN,
     MULTIPLICADOR_CUSPIDE, MULTIPLICADOR_ELITE, MULTIPLICADOR_MEDIO,
     MULTIPLICADOR_PUEBLO, MULTIPLICADOR_NEUTRO
 )
-from balance import balance_global, balance_por_instancia
+from balance import (
+    balance_global, balance_por_instancia, 
+    obtener_cargas_fortuna, modificar_cargas_fortuna,
+    obtener_cargas_maldicion, modificar_cargas_maldicion  # 🌟 Añadidos
+)
 
 TIERS = {
     "cuspide": {
@@ -73,25 +80,47 @@ def get_tier_info(user_id: int) -> dict:
     return TIERS[_clasificar(user_id)]
 
 
-def aplicar_impuesto_adaptativo(user_id: int, premio_base: int, instancia_actual: str) -> tuple[int, float]:
+def aplicar_impuesto_adaptativo(user_id: int, premio_base: int, instancia_actual: str, es_evento_especial: bool = False) -> tuple[int, float, bool, bool]:
     """
-    Aplica el multiplicador económico mitigando el impacto si el usuario
-    es rico a nivel global pero se encuentra en una instancia nueva en desarrollo.
+    Calcula el premio final basándose en los Tiers económicos y el estado del usuario.
+    Si 'es_evento_especial' es True, el usuario es inmune al sabotaje de la maldición.
     """
     tier_key = _clasificar(user_id)
     tier = TIERS[tier_key]
     multiplicador = tier["multiplicador"]
 
-    # ALGORITMO DE ATENUACIÓN: Si es Cúspide o Élite global, pero en ESTA instancia
-    # tiene menos de 15,000 Kakeras (Clase Media Mínima), reducimos el impuesto a la mitad.
+    # 1. ALGORITMO DE ATENUACIÓN INTER-INSTANCIA (Igual)
     if tier_key in ("cuspide", "elite"):
         desglose_local = balance_por_instancia(user_id)
         balance_local = desglose_local.get(instancia_actual, 0)
-        
         if balance_local < TIER_MEDIO_MIN:
-            impuesto_original = 1.0 - multiplicador
-            impuesto_mitigado = impuesto_original / 2
-            multiplicador = round(1.0 - impuesto_mitigado, 2)
+            multiplicador = round(1.0 - ((1.0 - multiplicador) / 2), 2)
+
+    # 2. SISTEMA DE MALDICIONES: TORPEZA
+    se_activo_maldicion = False
+    
+    # 🚨 EL BLINDAJE: Solo procesamos la maldición si NO es un evento especial
+    if not es_evento_especial:
+        cargas_maldicion = obtener_cargas_maldicion(user_id)
+        if cargas_maldicion > 0:
+            # Consumimos una carga de torpeza de todas formas
+            modificar_cargas_maldicion(user_id, -1)
+            
+            # Tiramos el dado del 50%
+            if random() < 0.50:
+                se_activo_maldicion = True
+                return 0, 0.0, False, True
+    else:
+        logging.info(f"🛡️ ECONOMÍA: Bypass de maldición activado para {user_id} por Evento Especial.")
+
+    # 3. SISTEMA DE BUFFS: BENDICIÓN DE FORTUNA (La fortuna SÍ se puede usar en eventos especiales)
+    se_uso_fortuna = False
+    cargas_fortuna = obtener_cargas_fortuna(user_id)
+    
+    if cargas_fortuna > 0:
+        multiplicador = round(multiplicador + 0.15, 2)
+        se_uso_fortuna = True
+        modificar_cargas_fortuna(user_id, -1)
 
     premio_final = round(premio_base * multiplicador)
-    return premio_final, multiplicador
+    return premio_final, multiplicador, se_uso_fortuna, False
